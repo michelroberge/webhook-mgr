@@ -1,0 +1,18 @@
+{
+    "repositories": [
+        {
+            "name": "bookmgr",
+            "path": "E:\\dev\\bookmgr",
+            "webhookPath": "/webhook/bookmgr",
+            "composeFile": "docker-compose.yml",
+            "branch" : "master"
+        },
+        {
+            "name": "monpanier",
+            "path": "E:\\dev\\monpanier",
+            "webhookPath": "/webhook/monpanier",
+            "composeFile": "docker-compose.yml",
+            "branch" : "master"
+        }
+    ]
+}
