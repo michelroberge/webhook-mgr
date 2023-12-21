@@ -12,7 +12,7 @@
             "path": "E:\\dev\\monpanier",
             "webhookPath": "/webhook/monpanier",
             "composeFile": "docker-compose.yml",
-            "branch" : "master"
+            "branch" : "main"
         }
     ]
 }
