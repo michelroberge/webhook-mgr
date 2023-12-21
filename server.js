@@ -2,13 +2,16 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const { exec } = require('child_process');
 const crypto = require('crypto');
+const util = require('util');
 const Docker = require('dockerode');
 require('dotenv').config();
 
 const app = express();
 const docker = new Docker();
 
-app.use(bodyParser.json({ limit: '10mb' })); // Adjust the limit as needed
+const execPromise = util.promisify(exec);
+
+app.use(bodyParser.json({ limit: '10mb' }));
 
 app.get('/webhook', (req, res) => {
     console.log('GET operation not supported');
@@ -20,7 +23,7 @@ const repositories = repositoriesData.repositories;
 const secret = process.env.GITHUB_WEBHOOK_SECRET;
 
 for (const repo of repositories) {
-    const { secretEnvName, path, webhookPath, composeFile } = repo;
+    const { path, webhookPath, composeFile } = repo;
 
     app.post(webhookPath, async (req, res) => {
         const payload = req.body;
@@ -37,46 +40,33 @@ for (const repo of repositories) {
         }
 
         if (eventType !== 'push' || payload.ref !== `refs/heads/${repo.branch}`) {
-        // If it's not a push event or not on the 'main' branch, don't proceed
-        console.log('Webhook received but conditions not met.');
-        res.status(200).send('Conditions not met for action.');
-        return;
-    }
+            console.log('Webhook received but conditions not met.');
+            res.status(200).send('Conditions not met for action.');
+            return;
+        }
+        
         res.status(200).send('Webhook received and actions completed successfully');
 
-        // Git pull code
-        const gitCmd = `git -C ${path} pull origin ${repo.branch}` ;
-        const options = {
-            cwd: path, 
-        };
+        try {
+            const gitCmd = `git -C ${path} pull origin ${repo.branch} --no-edit`;
+            const options = { cwd: path };
 
-        exec(gitCmd, options, async (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Error pulling code for ${repo.name}: ${error.message}`);
-                return;
-            }
-            if (stderr) {
-                console.error(`git stderr for ${repo.name}: ${stderr}`);
-            }
-            console.log(`git stdout for ${repo.name}: ${stdout}`);
+            const { stdout: gitStdout, stderr: gitStderr } = await execPromise(gitCmd, options);
+            console.log(`git stdout for ${repo.name}: ${gitStdout}`);
 
-            // Rebuild Docker containers from Docker Compose
-            try {
-                const command = `docker-compose -f ${composeFile} down && docker-compose -f ${composeFile} up -d --build`;
-                exec(command, options, (composeError, composeStdout, composeStderr) => {
-                    if (composeError) {
-                        console.error(`Error rebuilding Docker containers for ${repo.name}: ${composeError.message}`);
-                        return;
-                    }
-                    if (composeStderr) {
-                        console.error(`Docker compose stderr for ${repo.name}: ${composeStderr}`);
-                    }
-                    console.log(`Docker compose stdout for ${repo.name}: ${composeStdout}`);
-                });
-            } catch (err) {
-                console.error(`Error rebuilding Docker containers for ${repo.name}: ${err.message}`);
-            }
-        });
+            const command = `docker-compose -f ${composeFile} down && docker-compose -f ${composeFile} up -d --build`;
+            const { stdout: composeStdout, stderr: composeStderr } = await execPromise(command, options);
+            console.log(`Docker compose stdout for ${repo.name}: ${composeStdout}`);
+            
+            
+            console.log(`Webhook handler listening on port ${PORT}`);
+            
+            
+        } catch (err) {
+            console.error(`Error: ${err.message}`);
+            // Handle the error or exit the process if necessary
+            process.exit(1); // Exiting with status code 1 indicating an error
+        }
     });
 }
 
